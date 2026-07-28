@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: dependabot-fixup-${{ github.event.pull_request.number }}
@@ -18,12 +19,27 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
+      - name: Fix PR title prefix
+        if: startsWith(github.event.pull_request.title, 'build(deps')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          fixed=$(printf '%s' "$TITLE" | sed -E 's/^build\(deps[^)]*\): */deps: /')
+          gh pr edit "$PR_URL" --title "$fixed"
+
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
       - uses: bazel-contrib/setup-bazel@0.19.0
+
+      - name: Disable remote cache
+        run: |
+          echo "common --remote_cache=" >> ~/.bazelrc
+          echo "common --experimental_remote_downloader=" >> ~/.bazelrc
 
       - name: Detect required regeneration
         id: detect
