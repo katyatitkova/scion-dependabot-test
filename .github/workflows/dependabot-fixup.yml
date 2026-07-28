@@ -38,8 +38,11 @@ jobs:
 
       - name: Disable remote cache
         run: |
-          echo "common --remote_cache=" >> ~/.bazelrc
-          echo "common --experimental_remote_downloader=" >> ~/.bazelrc
+          {
+            echo "build --remote_cache= --experimental_remote_downloader="
+            echo "query --remote_cache= --experimental_remote_downloader="
+            echo "fetch --remote_cache= --experimental_remote_downloader="
+          } >> ~/.bazelrc
 
       - name: Detect required regeneration
         id: detect
