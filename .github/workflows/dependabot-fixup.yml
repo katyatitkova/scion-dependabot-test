@@ -60,6 +60,36 @@ jobs:
             echo "js=$(check 'private/mgmtapi/tools/(package\.json|pnpm-lock\.yaml)')"
           } >> "$GITHUB_OUTPUT"
 
+      # Dependabot only bumps the pin in requirements.txt
+      - name: Sync bumped versions into requirements.in
+        if: >-
+          steps.detect.outputs.pip_doc == 'true' ||
+          steps.detect.outputs.pip_env == 'true' ||
+          steps.detect.outputs.pip_lint == 'true'
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: |
+          for dir in doc tools/env/pip3 tools/lint/python; do
+            txt="$dir/requirements.txt"
+            in="$dir/requirements.in"
+            git diff "origin/$BASE_REF...HEAD" -- "$txt" \
+              | grep -oE '^\+[A-Za-z0-9._-]+==[A-Za-z0-9.!+-]+' \
+              | sed 's/^+//' \
+              | while read -r pin; do
+                  pkg="${pin%%==*}"
+                  ver="${pin#*==}"
+                  pkg_re=$(printf '%s' "$pkg" | sed 's/[._-]/[._-]/g')
+                  if grep -qiE "^${pkg_re} *==" "$in"; then
+                    sed -i -E "s/^(${pkg_re}) *==.*/\1==${ver}/I" "$in"
+                  elif grep -qiE "^${pkg_re} *>=" "$in"; then
+                    sed -i -E "s/^(${pkg_re}) *>=.*/\1>=${ver}/I" "$in"
+                  else
+                    echo "${pkg}>=${ver}" >> "$in"
+                  fi
+                done
+          done
+          git diff --stat -- doc tools
+
       - name: Regenerate Go artifacts
         if: steps.detect.outputs.go == 'true'
         run: make protobuf mocks gazelle write_all_source_files licenses
